@@ -40,8 +40,6 @@ Docs:
 - Replace `load_model()` and `predict()` with your real classifier.
 - SQLite data is stored under `output/`.
 
-## Future ideas / TODO
+## TODO
 
-- Add optional web/RAG-assisted lookup for grey-zone or high-risk cases.
-- Use external security references (for example OWASP guidance, attack signature references, or curated threat intel) to support deeper analysis when the local classifier/agent is uncertain.
-- Keep this optional so the core pipeline still works fully offline without Tavily or other search dependencies.
+- See `TODO.md` for implementation backlog and future feature ideas.
