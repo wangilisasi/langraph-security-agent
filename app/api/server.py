@@ -1,7 +1,9 @@
 """FastAPI server for the HTTP injection detection and response pipeline."""
 
 import asyncio
+import datetime
 import logging
+import threading
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 
@@ -24,6 +26,27 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 # Thread pool for running the synchronous LangGraph agent in the background
 _executor = ThreadPoolExecutor(max_workers=4)
+_analysis_status_lock = threading.Lock()
+_analysis_status: dict[str, dict] = {}
+
+
+def _now_iso() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def _set_analysis_status(request_id: str, status: str, **fields) -> None:
+    with _analysis_status_lock:
+        existing = _analysis_status.get(request_id, {})
+        merged = {**existing, **fields}
+        merged["status"] = status
+        merged["updated_at"] = _now_iso()
+        _analysis_status[request_id] = merged
+
+
+def _get_analysis_status(request_id: str) -> dict | None:
+    with _analysis_status_lock:
+        status = _analysis_status.get(request_id)
+        return dict(status) if status else None
 
 
 @asynccontextmanager
@@ -80,13 +103,32 @@ def _run_llm_analysis(http_request: dict, detection_result: dict) -> None:
     """
     request_id = detection_result["request_id"]
     try:
+        _set_analysis_status(request_id, "running")
         logger.info("LLM analysis started for %s", request_id)
         security_agent.invoke({
             "http_request": http_request,
             "detection_result": detection_result,
         })
+        incident = db.get_incident_by_request_id(request_id)
+        if incident:
+            _set_analysis_status(
+                request_id,
+                "completed",
+                completed_at=_now_iso(),
+                decision=incident.get("decision"),
+                action_taken=incident.get("action_taken"),
+                decision_source=incident.get("decision_source"),
+            )
+        else:
+            _set_analysis_status(request_id, "completed", completed_at=_now_iso())
         logger.info("LLM analysis completed for %s", request_id)
-    except Exception:
+    except Exception as exc:
+        _set_analysis_status(
+            request_id,
+            "failed",
+            completed_at=_now_iso(),
+            error=str(exc),
+        )
         logger.exception("LLM analysis failed for %s", request_id)
 
 
@@ -185,6 +227,13 @@ async def analyze(req: AnalyzeRequest, background_tasks: BackgroundTasks):
         is_grey_zone=True,
     )
 
+    _set_analysis_status(
+        request_id,
+        "queued",
+        queued_at=_now_iso(),
+        source_ip=req.source_ip,
+    )
+
     await queue_llm_analysis(http_request, detection_result)
 
     return AnalyzeResponse(
@@ -243,3 +292,31 @@ async def get_stats():
         "low": LOW_THRESHOLD,
     }
     return stats
+
+
+@app.get("/request/{request_id}")
+async def get_request_status(request_id: str):
+    """Get processing status and incident outcome for a specific request_id."""
+    incident = db.get_incident_by_request_id(request_id)
+    status = _get_analysis_status(request_id)
+
+    if status is None and incident is None:
+        return {
+            "request_id": request_id,
+            "status": "not_found",
+            "incident": None,
+        }
+
+    if status is None and incident is not None:
+        return {
+            "request_id": request_id,
+            "status": "completed",
+            "incident": incident,
+        }
+
+    return {
+        "request_id": request_id,
+        "status": status["status"],
+        "analysis": status,
+        "incident": incident,
+    }

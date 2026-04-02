@@ -125,6 +125,22 @@ def get_recent_incidents(source_ip: str, limit: int = 20) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def get_incident_by_request_id(request_id: str) -> dict | None:
+    """Fetch a single incident by request_id."""
+    conn = _get_connection()
+    row = conn.execute(
+        """
+        SELECT request_id, timestamp, source_ip, method, url, headers, body,
+               confidence, decision, decision_source, action_taken, llm_reasoning
+        FROM incidents
+        WHERE request_id = ?
+        LIMIT 1
+        """,
+        (request_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 # ---------------------------------------------------------------------------
 # IP reputation operations
 # ---------------------------------------------------------------------------

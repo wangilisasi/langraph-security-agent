@@ -34,6 +34,7 @@ You should see:
 - `GET /stats`
 - `GET /incidents`
 - `GET /ip/{source_ip}`
+- `GET /request/{request_id}`
 
 ## 4. PowerShell test commands
 
@@ -56,7 +57,8 @@ Expected:
 
 ```powershell
 $req = @{ method="POST"; url="/api/search"; body="q=select * from users where name=''x'' or 1=1"; source_ip="10.0.0.99" } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/analyze -ContentType "application/json" -Body $req
+$resp = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/analyze -ContentType "application/json" -Body $req
+$resp | ConvertTo-Json -Depth 5
 ```
 
 Expected immediate response:
@@ -70,6 +72,26 @@ Then check follow-up state:
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/ip/10.0.0.99
 Invoke-RestMethod "http://127.0.0.1:8000/incidents?limit=20"
+$requestId = $resp.request_id
+Invoke-RestMethod ("http://127.0.0.1:8000/request/" + $requestId) | ConvertTo-Json -Depth 6
+```
+
+Request status endpoint values:
+
+- `queued`: request accepted and waiting for background processing
+- `running`: background LLM analysis in progress
+- `completed`: analysis finished
+- `failed`: background analysis raised an exception
+- `not_found`: unknown request ID
+
+You can poll status until it finishes:
+
+```powershell
+do {
+  $statusResp = Invoke-RestMethod ("http://127.0.0.1:8000/request/" + $requestId)
+  $statusResp | ConvertTo-Json -Depth 6
+  Start-Sleep -Seconds 2
+} while ($statusResp.status -in @("queued", "running"))
 ```
 
 ### 4.3 High-confidence attack and repeat-offender ban
@@ -113,6 +135,12 @@ Run unit/smoke tests:
 
 1. Port already in use:
 - Stop the existing process on `8000` or run uvicorn on another port.
+
+Example alternate port:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.api.server:app --host 127.0.0.1 --port 8001
+```
 
 2. Missing packages:
 - Re-run `pip install -r requirements.txt` in `.venv`.
