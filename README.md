@@ -10,14 +10,16 @@ A LangGraph-based HTTP injection attack detection and response agent for PhD res
 - Logs incidents and IP reputation in SQLite
 - Exposes a FastAPI server for analysis, stats, and incident lookup
 
-## Main files
+## Project layout
 
-- `server.py` — FastAPI entrypoint
-- `security_agent.py` — LangGraph security workflow
-- `detector.py` — ML wrapper and confidence routing
-- `response_nodes.py` — fast-path auto-response logic
-- `security_tools.py` — tools used by the LLM for grey-zone analysis
-- `database.py` — SQLite storage for incidents and IP reputation
+- `server.py` — compatibility FastAPI entrypoint (`app` import for `uvicorn server:app`)
+- `app/api/server.py` — FastAPI routes and async grey-zone queueing
+- `app/graph/security_agent.py` — LangGraph security workflow
+- `app/detection/detector.py` — ML wrapper and confidence routing
+- `app/graph/response_nodes.py` — fast-path auto-response logic
+- `app/tools/security_tools.py` — tools used by the LLM for grey-zone analysis
+- `app/storage/database.py` — SQLite storage for incidents and IP reputation
+- `tests/` — minimal pytest scaffold
 - `ARCHITECTURE.md` — design notes
 - `PROGRESS.md` — implementation status
 
@@ -28,6 +30,12 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+python -m uvicorn app.api.server:app --port 8000
+```
+
+Compatibility entrypoint (still works):
+
+```bash
 python -m uvicorn server:app --port 8000
 ```
 
@@ -36,7 +44,7 @@ Docs:
 
 ## Notes
 
-- `detector.py` still contains a placeholder model interface.
+- `app/detection/detector.py` still contains a placeholder model interface.
 - Replace `load_model()` and `predict()` with your real classifier.
 - SQLite data is stored under `output/`.
 

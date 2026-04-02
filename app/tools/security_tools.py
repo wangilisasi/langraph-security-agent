@@ -6,7 +6,7 @@ from pathlib import Path
 
 from langchain_core.tools import tool
 
-import database as db
+from app.storage import database as db
 
 OUTPUT_DIR = Path("output")
 OUTPUT_DIR.mkdir(exist_ok=True)

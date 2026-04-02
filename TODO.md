@@ -2,8 +2,8 @@
 
 ## Core implementation
 
-- [ ] Replace the placeholder model-loading code in `detector.py::load_model()` with the real trained classifier loader.
-- [ ] Replace the placeholder inference logic in `detector.py::predict()` with the real feature extraction + prediction pipeline.
+- [ ] Replace the placeholder model-loading code in `app/detection/detector.py::load_model()` with the real trained classifier loader.
+- [ ] Replace the placeholder inference logic in `app/detection/detector.py::predict()` with the real feature extraction + prediction pipeline.
 
 ## Research / evaluation
 

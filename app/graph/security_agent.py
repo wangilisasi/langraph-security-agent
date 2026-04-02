@@ -16,9 +16,9 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from detector import detector_node, route_by_confidence
-from response_nodes import auto_respond, pass_through
-from security_tools import security_tools
+from app.detection.detector import detector_node, route_by_confidence
+from app.graph.response_nodes import auto_respond, pass_through
+from app.tools.security_tools import security_tools
 
 
 # ---------------------------------------------------------------------------

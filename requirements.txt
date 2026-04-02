@@ -4,3 +4,4 @@ langchain-core==1.2.13
 python-dotenv==1.2.1
 fastapi
 uvicorn[standard]
+pytest

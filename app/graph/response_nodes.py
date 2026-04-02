@@ -2,9 +2,7 @@
 
 import datetime
 
-from detector import HIGH_THRESHOLD
-
-import database as db
+from app.storage import database as db
 
 # ---------------------------------------------------------------------------
 # Configuration
