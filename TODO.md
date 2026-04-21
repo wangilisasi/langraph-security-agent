@@ -20,6 +20,8 @@
 
 ## Future features
 
+- [ ] Add local security-knowledge RAG for grey-zone analysis, starting with OWASP and curated injection references.
+- [ ] Add similar-incident retrieval over prior logged incidents to support consistency and explainability.
 - [ ] Add optional web/RAG-assisted lookup for grey-zone or high-risk cases.
 - [ ] Use external security references such as OWASP guidance, attack-signature references, or curated threat intel when the local classifier/agent is uncertain.
 - [ ] Keep external lookup optional so the core pipeline still works fully offline without Tavily or other search dependencies.
