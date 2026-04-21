@@ -1,14 +1,16 @@
 """SQLite database for incident logging and IP reputation tracking."""
 
+import os
 import sqlite3
 import datetime
 import json
 import threading
 from pathlib import Path
 
-DB_DIR = Path("output")
+DB_DIR = Path(os.getenv("SECURITY_OUTPUT_DIR", "output"))
 DB_DIR.mkdir(exist_ok=True)
-DB_PATH = DB_DIR / "security.db"
+DB_FILENAME = os.getenv("SECURITY_DB_FILENAME", "security.db")
+DB_PATH = DB_DIR / DB_FILENAME
 
 _local = threading.local()
 

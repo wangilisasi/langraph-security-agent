@@ -1,4 +1,4 @@
-"""LangGraph security agent — HTTP injection detection and response pipeline."""
+"""LangGraph security agent for grey-zone HTTP request analysis."""
 
 import json
 import operator
@@ -16,8 +16,6 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from app.detection.detector import detector_node, route_by_confidence
-from app.graph.response_nodes import auto_respond, pass_through
 from app.tools.security_tools import security_tools
 
 
@@ -135,37 +133,18 @@ security_tool_node = ToolNode(tools=security_tools)
 
 
 # ---------------------------------------------------------------------------
-# Build the security graph
+# Build the grey-zone analysis graph
 # ---------------------------------------------------------------------------
 
 graph = StateGraph(SecurityState)
 
-# Add all nodes
-graph.add_node("detector", detector_node)
-graph.add_node("auto_respond", auto_respond)
-graph.add_node("pass_through", pass_through)
 graph.add_node("prepare_llm_context", prepare_llm_context)
 graph.add_node("security_chatbot", security_chatbot)
 graph.add_node("security_tools", security_tool_node)
 
-# Entry point
-graph.add_edge(START, "detector")
-
-# 3-way routing based on confidence
-graph.add_conditional_edges("detector", route_by_confidence, {
-    "auto_respond": "auto_respond",
-    "llm_analyze": "prepare_llm_context",
-    "pass_through": "pass_through",
-})
-
-# Fast paths go straight to END
-graph.add_edge("auto_respond", END)
-graph.add_edge("pass_through", END)
-
-# LLM grey-zone path: prepare context → chatbot ↔ tools → END
+graph.add_edge(START, "prepare_llm_context")
 graph.add_edge("prepare_llm_context", "security_chatbot")
 graph.add_conditional_edges("security_chatbot", should_continue_security)
 graph.add_edge("security_tools", "security_chatbot")
 
-# Compile
 security_agent = graph.compile()

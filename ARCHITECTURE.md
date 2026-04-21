@@ -31,7 +31,7 @@ HTTP Request arrives
 │
 ▼
 [INLINE — milliseconds]
-detector_node (ML model)
+FastAPI /analyze → detector.predict(http_request)
 │
 ├── confidence ≥ HIGH_THRESHOLD (0.95)
 │     → BLOCK immediately
@@ -41,7 +41,7 @@ detector_node (ML model)
 │
 ├── LOW_THRESHOLD (0.15) < confidence < HIGH_THRESHOLD (0.95)
 │     → PASS request through to origin (no user delay)
-│     → Queue for async LLM analysis
+│     → Queue async LangGraph analysis
 │     → LLM analyzes → decides → updates IP reputation
 │     → May ban IP for future requests
 │
@@ -90,11 +90,9 @@ The LLM agent is only invoked for requests where the ML model is uncertain. It p
 |------|---------|
 | `inspect_request_fields` | Decompose HTTP request into parts for targeted analysis |
 | `check_ip_history` | Query SQLite for past behavior from a source IP |
-| `log_incident` | Write structured incident record to SQLite |
-| `update_ip_reputation` | Escalate or de-escalate an IP's threat level |
+| `log_security_incident` | Write structured incident record to SQLite |
 | `block_ip` | Add IP to blocklist with a TTL |
-| `send_alert` | Notify admin via webhook, file, or console |
-| `search_attack_signatures` | RAG over OWASP/injection pattern knowledge base |
+| `send_alert` | Notify admin via file today, or external systems later |
 
 ## State Schema
 
@@ -151,18 +149,40 @@ class AgentState(TypedDict, total=False):
 **FastAPI server** with a `/analyze` endpoint:
 
 - Receives HTTP request metadata as JSON
+- Owns the live detection path and threshold routing
 - Inline path: ML model predicts → immediate response (block or pass)
 - Async path: grey-zone requests queued → LangGraph agent processes in background
 - Response to caller includes: `{decision, confidence, action_taken, request_id}`
 
 ## LangGraph Flow
 
+### Default variant
+
+The default LangGraph workflow owns only grey-zone analysis. Inline high-confidence
+blocking and low-confidence pass-through remain in the FastAPI layer.
+
 ```
-START → detector
+START → prepare_llm_context → security_chatbot ↔ security_tools → END
+```
+
+### Full LangGraph variant
+
+The experimental full-graph variant moves ban checks, detection, and threshold routing
+into LangGraph, while still keeping grey-zone LLM work asynchronous for fair latency
+comparison.
+
+```
+START → check_ban_status
          │
-         ├── "auto_respond"   → auto_respond_node → END
-         ├── "llm_analyze"    → planner → chatbot ↔ tools → END
-         └── "pass_through"   → log_only_node → END
+         ├── banned          → blocked_banned_ip → END
+         └── detector
+               │
+               ├── high      → auto_respond → END
+               ├── low       → pass_through → END
+               └── grey      → queue_for_review → END
+
+(background worker)
+prepare_llm_context → security_chatbot ↔ security_tools → END
 ```
 
 ## Configuration

@@ -29,14 +29,14 @@ We converted the existing LangGraph research assistant into an **HTTP injection 
 ## How the Pipeline Works
 
 ```
-HTTP Request → detector (your ML model, ~ms)
-                │
-                ├── confidence >= 0.95 → auto_respond (block + log, no LLM)
-                │
-                ├── 0.15 < confidence < 0.95 → LLM agent analyzes async
-                │     └── inspect fields → check IP history → decide → log/block/alert
-                │
-                └── confidence <= 0.15 → pass_through (log only, no LLM)
+HTTP Request → FastAPI /analyze → detector (your ML model, ~ms)
+                               │
+                               ├── confidence >= 0.95 → auto_respond (block + log, no LLM)
+                               │
+                               ├── 0.15 < confidence < 0.95 → queue LangGraph grey-zone analysis async
+                               │     └── inspect fields → check IP history → decide → log/block/alert
+                               │
+                               └── confidence <= 0.15 → pass_through (log only, no LLM)
 ```
 
 ## How to Run
@@ -134,5 +134,5 @@ SQLite at `output/security.db` (auto-created on first run).
 3. `Add detector module with ML model interface, confidence routing, and graph node`
 4. `Add auto_respond and pass_through response nodes with repeat offender escalation`
 5. `Add security tools for LLM grey-zone analysis (inspect, history, log, block, alert)`
-6. `Wire full security graph with 3-way routing and LLM grey-zone analysis`
+6. `Wire security graph for grey-zone LLM analysis`
 7. `Add FastAPI server with /analyze endpoint and async LLM grey-zone processing`

@@ -7,8 +7,15 @@
 
 ## Research / evaluation
 
-1. Add batch evaluation plus metrics collection for labeled HTTP request datasets.
-2. Export incident and evaluation data to CSV/pandas-friendly format for thesis analysis.
+1. Refresh memory on sequence diagrams, then draw sequence diagrams for both the default FastAPI-led architecture and the full-LangGraph variant.
+2. Add batch evaluation plus metrics collection for labeled HTTP request datasets.
+3. Export incident and evaluation data to CSV/pandas-friendly format for thesis analysis.
+
+## Architecture experiments
+
+1. Compare the default FastAPI-led architecture with the full-LangGraph variant on the same labeled dataset.
+2. Measure whether full-graph orchestration adds meaningful latency or improves maintainability/explainability, while preserving async grey-zone semantics.
+3. Keep experiment outputs isolated by architecture variant to avoid mixing incident/evaluation data.
 
 ## Performance / caching (planned)
 
