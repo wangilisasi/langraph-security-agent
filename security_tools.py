@@ -2,13 +2,14 @@
 
 import datetime
 import json
+import os
 from pathlib import Path
 
 from langchain_core.tools import tool
 
 import database as db
 
-OUTPUT_DIR = Path("output")
+OUTPUT_DIR = Path(os.getenv("SECURITY_OUTPUT_DIR", "output"))
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 

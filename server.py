@@ -74,9 +74,10 @@ class AnalyzeResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _run_llm_analysis(http_request: dict, detection_result: dict) -> None:
-    """Run the full LangGraph security agent for a grey-zone request.
+    """Run grey-zone LangGraph analysis in the background.
 
-    This runs synchronously in a thread pool — does not block the API response.
+    This runs synchronously in a thread pool and assumes API-layer routing
+    already classified the request as grey-zone.
     """
     request_id = detection_result["request_id"]
     try:

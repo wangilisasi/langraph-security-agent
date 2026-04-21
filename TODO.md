@@ -8,7 +8,15 @@
 ## Research / evaluation
 
 - [ ] Add batch evaluation + metrics collection for labeled HTTP request datasets.
+- [ ] Add an evaluator component so the agent can systematically assess detections, responses, and overall decision quality.
 - [ ] Export incident and evaluation data to CSV/pandas-friendly format for thesis analysis.
+
+## Architecture experiments
+
+- [ ] Refresh memory on sequence diagrams, then draw sequence diagrams for both the default FastAPI-led architecture and the full-LangGraph variant.
+- [ ] Compare the default FastAPI-led architecture with the full-LangGraph variant on the same labeled dataset.
+- [ ] Measure whether full-graph orchestration adds meaningful latency or improves maintainability/explainability, while preserving async grey-zone semantics.
+- [ ] Keep experiment outputs isolated by architecture variant to avoid mixing incident/evaluation data.
 
 ## Future features
 
