@@ -1,5 +1,8 @@
 # Full LangGraph Variant Sequence Diagram
 
+Default experimental data path:
+- `output/full_graph/security_full_graph.db`
+
 ```mermaid
 sequenceDiagram
     autonumber

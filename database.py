@@ -7,9 +7,9 @@ import json
 import threading
 from pathlib import Path
 
-DB_DIR = Path(os.getenv("SECURITY_OUTPUT_DIR", "output"))
+DB_DIR = Path(os.getenv("SECURITY_OUTPUT_DIR", "output/full_graph"))
 DB_DIR.mkdir(exist_ok=True)
-DB_FILENAME = os.getenv("SECURITY_DB_FILENAME", "security.db")
+DB_FILENAME = os.getenv("SECURITY_DB_FILENAME", "security_full_graph.db")
 DB_PATH = DB_DIR / DB_FILENAME
 
 _local = threading.local()

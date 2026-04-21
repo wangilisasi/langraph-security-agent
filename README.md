@@ -57,15 +57,20 @@ Docs:
 - FastAPI is a thin transport wrapper
 - LangGraph owns ban checks, detection, routing, and immediate fast-path decisions
 - Grey-zone requests still return immediately and are analyzed asynchronously in the background
-- Recommended isolated DB path for experiments, for example:
-  - `SECURITY_OUTPUT_DIR=output/full_graph`
-  - `SECURITY_DB_FILENAME=security_full_graph.db`
+- Uses its own DB by default:
+  - `output/full_graph/security_full_graph.db`
 
 Example:
 
 ```bash
-SECURITY_OUTPUT_DIR=output/full_graph \
-SECURITY_DB_FILENAME=security_full_graph.db \
+python -m uvicorn full_langgraph_server:app --port 8001
+```
+
+Override example:
+
+```bash
+SECURITY_OUTPUT_DIR=output/another_experiment \
+SECURITY_DB_FILENAME=security_variant.db \
 python -m uvicorn full_langgraph_server:app --port 8001
 ```
 
