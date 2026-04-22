@@ -12,9 +12,9 @@ HTTP-layer injection attacks remain a persistent threat to web applications beca
 
 ## 1. Introduction
 
-Web applications continue to serve as a primary delivery surface for injection attacks, including SQL injection, cross-site scripting, command injection, LDAP injection, XML/XPath injection, and related payload-based exploitation techniques. These attacks are especially difficult to handle in production because defenders must make decisions under strict latency budgets while malicious payloads are often obfuscated, distributed across fields, or intentionally shaped to resemble benign traffic.
+Web applications continue to serve as a primary delivery surface for injection attacks, including SQL injection, cross-site scripting, command injection, LDAP injection, XML/XPath injection, and related payload-based exploitation techniques. These attacks are especially difficult to handle in production because defenders must make decisions under strict latency budgets while malicious payloads are often obfuscated, distributed across fields, or intentionally shaped to resemble benign traffic (OWASP, 2021; OWASP, 2025).
 
-Signature-driven web application firewalls remain operationally useful, but they are brittle against payload mutation, encoding tricks, and previously unseen combinations of attack syntax. Purely rule-based systems can be bypassed when attackers alter spacing, casing, comments, delimiters, or encoding layers. On the other end of the design space, language-model-based security analysis can offer richer contextual reasoning, but using an LLM synchronously on every live request is operationally expensive and can degrade user experience.
+Signature-driven web application firewalls remain operationally useful, but they are brittle against payload mutation, encoding tricks, and previously unseen combinations of attack syntax. Purely rule-based systems can be bypassed when attackers alter spacing, casing, comments, delimiters, or encoding layers (Alghawazi et al., 2022; Dawadi et al., 2023). On the other end of the design space, language-model-based security analysis can offer richer contextual reasoning, but using an LLM synchronously on every live request is operationally expensive and can degrade user experience (Xu et al., 2024).
 
 This tension creates a design problem: how can a defensive system preserve millisecond-level inline performance for most HTTP traffic while still applying richer reasoning to ambiguous cases? This paper addresses that problem with a hybrid architecture that uses a fast machine learning detector on the live path and invokes a LangGraph-based LLM agent only for uncertain requests. The central idea is simple: not every request deserves agentic analysis. Most requests should be resolved immediately, while only the grey zone should be escalated.
 
@@ -28,6 +28,18 @@ The main contributions of this work are:
 - A persistent incident and IP-reputation layer implemented in SQLite to support graduated response actions and future research evaluation.
 - An explicit comparison point between an API-led architecture and a full-LangGraph orchestration variant, enabling future evaluation of orchestration placement rather than detection semantics alone.
 
+### 1.1 Literature Review and Positioning
+
+Prior work on web injection defense can be grouped into three broad strands: conventional rule-based filtering, machine-learning-based payload classification, and emerging LLM-assisted security analysis. The proposed system sits at the intersection of these strands, but its main contribution is architectural rather than purely algorithmic.
+
+First, rule-based and signature-driven web application firewalls remain the operational baseline for many deployments because they are fast, inspectable, and relatively easy to integrate. OWASP continues to rank injection among the major web application risk categories, covering SQL injection, XSS, command injection, and related interpreter-targeted attacks (OWASP, 2021; OWASP, 2025). At the same time, the literature and practitioner guidance both emphasize a familiar limitation: rule-centric systems can be bypassed by payload mutation, encoding tricks, parser inconsistencies, and novel combinations of otherwise known attack fragments. This makes purely signature-driven defenses necessary but insufficient for modern HTTP traffic (Alghawazi et al., 2022; Dawadi et al., 2023).
+
+Second, a substantial body of research has explored machine learning and deep learning for detecting injection attacks from HTTP payloads and request features. Alghawazi et al. (2022) survey SQL injection detection with machine learning and show how the field has moved beyond handcrafted signatures toward learned lexical and structural features. Dawadi et al. (2023) present a deep-learning-enabled web application firewall for multiple web attack classes, while Alhamyani and Alshammari (2024) focus specifically on machine-learning-driven XSS detection. Wang et al. (2024) extend this line of work to command injection using deep learning. Taken together, these studies support the use of learned detectors for better generalization across obfuscated payloads. However, much of this literature is organized around offline classification accuracy, attack-specific datasets, or single-stage inference, with less attention to deployment architecture, latency-aware routing, and post-detection response orchestration.
+
+Third, recent literature on LLMs in cybersecurity suggests that language models can add value for contextual reasoning, explanation, and multi-step analysis, especially when paired with tools and external state. Xu et al. (2024) survey the broader use of large language models across cybersecurity tasks and describe both their promise and their operational limitations. At the same time, work by Greshake et al. (2023) on indirect prompt injection and by Lan et al. (2025) on prompt injection detection in LLM-integrated applications shows that LLM-based systems introduce new security and trust-boundary concerns of their own. This matters for the present design: if an LLM is used in a security pipeline, it should be carefully bounded, tool-mediated, and kept away from the strictest latency-critical path unless there is a strong reason to do otherwise.
+
+The present paper is positioned against that background. It does not claim a novel best-in-class detector, nor does it argue that every HTTP request should be sent through an agent. Instead, it contributes a hybrid systems architecture in which a fast inline detector handles the majority of traffic, while only uncertain requests are escalated to an asynchronous LangGraph-based reasoning layer with persistent state and graduated response tools. Relative to prior ML-only detection work, the emphasis here is operational orchestration. Relative to fully agentic analysis, the emphasis is disciplined placement of agentic reasoning behind a confidence gate.
+
 ## 2. Problem Setting and Scope
 
 The system is designed for HTTP-layer injection detection and response. It focuses on attacks delivered through request URLs, query parameters, headers, and bodies. The in-scope classes currently include:
@@ -38,6 +50,8 @@ The system is designed for HTTP-layer injection detection and response. It focus
 - LDAP injection
 - XML/XPath injection
 - Header injection
+
+These attack classes are consistent with OWASP injection categories and with the families emphasized in recent web-attack detection literature (OWASP, 2021; OWASP, 2025; Dawadi et al., 2023).
 
 The current prototype is intentionally narrower than a full web security platform. The following are out of scope:
 
@@ -76,87 +90,52 @@ Grey-zone requests are passed through immediately but queued for background anal
 Figure 1 summarizes the default API-led architecture and makes the separation between the low-latency inline path and the asynchronous grey-zone review path explicit.
 
 ```text
-+------------------------------+
-| HTTP client / traffic source |
-+------------------------------+
-               |
-               v
-+-----------------------------+
-| FastAPI service: /analyze   |
-+-----------------------------+
-               |
-               v
-      +---------------------+        yes        +-----------------------+
-      | Source IP banned?   | ----------------> | Inline block response |
-      +---------------------+                   +-----------------------+
-               | no                                      |
-               v                                         v
-+-----------------------------+               +------------------------------+
-| Request normalization       |               | Returned immediately to      |
-+-----------------------------+               | client                       |
-               |                              +------------------------------+
-               v
-+-----------------------------+
-| Inline detector             |
-| confidence in [0,1]         |
-+-----------------------------+
-               |
-               v
-      +---------------------+
-      | Confidence router   |
-      +---------------------+
-        /          |          \
-       /           |           \
-      v            v            v
-+-------------+ +-------------+ +----------------------+
-| confidence  | | confidence  | | grey-zone /          |
-| >= HIGH     | | <= LOW      | | uncertain request    |
-+-------------+ +-------------+ +----------------------+
-      |              |                    |
-      v              v                    v
-+-------------+ +-------------+ +---------------------------+
-| auto_respond| | pass_through| | Return under_review       |
-+-------------+ +-------------+ | immediately to client     |
-      |              |          +---------------------------+
-      |              |                    |
-      |              |                    v
-      |              |          +---------------------------+
-      |              |          | Background queue /        |
-      |              |          | thread pool               |
-      |              |          +---------------------------+
-      |              |                    |
-      |              |                    v
-      |              |          +---------------------------+
-      |              |          | LangGraph security agent  |
-      |              |          +---------------------------+
-      |              |                    |
-      |              |                    v
-      |              |          +---------------------------+
-      |              |          | Security tools            |
-      |              |          | - inspect_request_fields  |
-      |              |          | - check_ip_history        |
-      |              |          | - log_security_incident   |
-      |              |          | - block_ip                |
-      |              |          | - send_alert              |
-      |              |          +---------------------------+
-      |              |                    |
-      |              |                    v
-      |              |          +---------------------------+
-      |              |          | Post-hoc actions          |
-      |              |          | alert / temp ban / record |
-      |              |          +---------------------------+
-      |              |                    |
-      |              |                    v
-      |              |          +---------------------------+
-      +------------+ |          | SQLite                    |
-                   | |          | incidents + ip_reputation |
-                   | |          +---------------------------+
-                   | |                    ^
-                   | +--------------------+
-                   +----------------------+
++------------------+
+|   HTTP client    |
++------------------+
+         |
+         v
++------------------+     +-----------+     +--------+
+| FastAPI /analyze | --> | Ban check | --> | Block  |
++------------------+     +-----------+     +--------+
+         |
+         v
++----------------------+     +-------------------+
+| Normalize + detector | --> | Confidence router |
++----------------------+     +-------------------+
+                                   |       |       |
+                              high |   low |   grey zone
+                                   v       v       v
+                           +-------------+ +-------------+ +----------------------+
+                           | auto_respond| | pass_through| | Return under_review  |
+                           +-------------+ +-------------+ +----------------------+
+                                  |              |                  |
+                                  |              |                  v
+                                  |              |        +------------------+
+                                  |              |        | Background queue |
+                                  |              |        +------------------+
+                                  |              |                  |
+                                  |              |                  v
+                                  |              |        +------------------+
+                                  |              |        | LangGraph agent  |
+                                  |              |        +------------------+
+                                  |              |                  |
+                                  |              |                  v
+                                  |              |        +------------------+
+                                  |              |        | Security tools   |
+                                  |              |        +------------------+
+                                  |              |                  |
+                                  +--------------+------------------+
+                                                     |
+                                                     v
+                                 +----------------------------------+
+                                 | SQLite: incidents + ip_reputation|
+                                 +----------------------------------+
 
-Client status polling:
-HTTP client ---> FastAPI service: /request/{request_id} ---> SQLite
+Status polling:
++------------------------------+     +----------------------------------+
+| FastAPI /request/{request_id}| --> | SQLite: incidents + ip_reputation|
++------------------------------+     +----------------------------------+
 ```
 
 *Figure 1. Hybrid architecture of the proposed system. FastAPI owns the live routing decision, while LangGraph is reserved for asynchronous analysis of grey-zone requests.*
@@ -202,7 +181,7 @@ The use of dedicated response nodes prevents trivial cases from consuming LLM re
 
 ### 5.3 LangGraph Security Agent
 
-The grey-zone workflow is implemented as a LangGraph state machine. Its state includes the request payload, detection result, message history, response data, and accumulated incident log entries. The graph starts by converting the request and detector output into a structured prompt context. It then invokes a chat model configured through `langchain_openai` and OpenRouter. If the model requests tools, execution loops through a `ToolNode` until the interaction completes.
+The grey-zone workflow is implemented as a LangGraph state machine (LangChain, 2025). Its state includes the request payload, detection result, message history, response data, and accumulated incident log entries. The graph starts by converting the request and detector output into a structured prompt context. It then invokes a chat model configured through `langchain_openai` and OpenRouter. If the model requests tools, execution loops through a `ToolNode` until the interaction completes.
 
 The current graph topology is intentionally small:
 
@@ -259,13 +238,13 @@ This design reflects a practical security posture. Not every suspicious event sh
 
 ## 7. Why LangGraph Fits This Problem
 
-LangGraph is not used here as decoration. It is used where the problem actually benefits from controlled agentic orchestration: the ambiguous middle of the decision distribution.
+LangGraph is not used here as decoration. It is used where the problem actually benefits from controlled agentic orchestration: the ambiguous middle of the decision distribution (LangChain, 2025; Xu et al., 2024).
 
 Three properties make it a good fit:
 
 - The grey zone often requires multi-step reasoning rather than single-shot classification.
 - Tool access is necessary because historical IP context and durable incident logging are part of the decision process.
-- The workflow benefits from explicit state transitions instead of opaque chained prompts.
+- The workflow benefits from explicit state transitions instead of opaque chained prompts (LangChain, 2025).
 
 At the same time, the design avoids the common mistake of sending every request through the graph. That would be expensive, harder to defend operationally, and unnecessary for obviously benign or obviously malicious traffic.
 
@@ -337,16 +316,18 @@ This paper draft presented a hybrid LangGraph security agent for HTTP injection 
 
 The current contribution is strongest as a systems and architecture paper draft grounded in a working prototype. The next step is straightforward but non-trivial: integrate the final trained detector, build the batch evaluation pipeline, and generate quantitative results that test the architectural claims under realistic traffic and attack conditions. If those results hold, the system can support a stronger argument that agentic orchestration is most useful not as a replacement for inline detection, but as a targeted second-stage mechanism for ambiguous security events.
 
-## 12. Candidate References
+## 12. References
 
-The draft below needs a proper literature pass before submission. These are placeholder reference slots to replace with verified sources from the thesis library:
-
-- [REF] OWASP material on injection risks and web application security categories.
-- [REF] Prior work on machine learning for SQL injection and XSS detection.
-- [REF] Prior work on deep learning for payload classification and intrusion detection.
-- [REF] LangGraph or graph-based agent orchestration documentation or technical references.
-- [REF] Literature on explainability, human-in-the-loop review, or contextual reasoning in security operations.
-- [REF] Research comparing rule-based versus learned web attack detection.
+- Alghawazi, M., Alghazzawi, D., and Alarifi, S. (2022). *Detection of SQL Injection Attack Using Machine Learning Techniques: A Systematic Literature Review*. Journal of Cybersecurity and Privacy, 2(4), 764-777. [https://www.mdpi.com/2624-800X/2/4/39](https://www.mdpi.com/2624-800X/2/4/39)
+- Alhamyani, R., and Alshammari, M. (2024). *Machine Learning-Driven Detection of Cross-Site Scripting Attacks*. Information, 15(7), 420. [https://www.mdpi.com/2078-2489/15/7/420/xml](https://www.mdpi.com/2078-2489/15/7/420/xml)
+- Dawadi, B. R., Adhikari, B., and Srivastava, D. K. (2023). *Deep Learning Technique-Enabled Web Application Firewall for the Detection of Web Attacks*. Sensors, 23(4), 2073. [https://www.mdpi.com/1424-8220/23/4/2073](https://www.mdpi.com/1424-8220/23/4/2073)
+- Greshake, K., Abdelnabi, S., Mishra, S., Endres, C., Holz, T., and Fritz, M. (2023). *Not What You've Signed Up For: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection*. arXiv:2302.12173. [https://arxiv.org/abs/2302.12173](https://arxiv.org/abs/2302.12173)
+- Lan, Q., Kaul, A., and Jones, S. (2025). *Prompt Injection Detection in LLM Integrated Applications*. International Journal of Network Dynamics and Intelligence, 4(2), 100013. [https://www.sciltp.com/journals/ijndi/articles/2506000841](https://www.sciltp.com/journals/ijndi/articles/2506000841)
+- LangChain. (2025). *LangGraph Overview*. [https://docs.langchain.com/oss/python/langgraph/overview](https://docs.langchain.com/oss/python/langgraph/overview)
+- OWASP. (2021). *A03:2021 Injection*. OWASP Top 10:2021. [https://owasp.org/Top10/2021/A03_2021-Injection/](https://owasp.org/Top10/2021/A03_2021-Injection/)
+- OWASP. (2025). *A05:2025 Injection*. OWASP Top 10:2025. [https://owasp.org/Top10/2025/A05_2025-Injection/](https://owasp.org/Top10/2025/A05_2025-Injection/)
+- Wang, X., Zhai, J., and Yang, H. (2024). *Detecting Command Injection Attacks in Web Applications Based on Novel Deep Learning Methods*. Scientific Reports, 14, 25487. [https://www.nature.com/articles/s41598-024-74350-3](https://www.nature.com/articles/s41598-024-74350-3)
+- Xu, H., Wang, S., Li, N., Wang, K., Zhao, Y., Chen, K., Yu, T., Liu, Y., and Wang, H. (2024). *Large Language Models for Cyber Security: A Systematic Literature Review*. arXiv:2405.04760. [https://arxiv.org/abs/2405.04760](https://arxiv.org/abs/2405.04760)
 
 ## Appendix A. Repo-to-Paper Mapping
 
