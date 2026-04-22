@@ -1,75 +1,67 @@
 # Default API-Led Architecture Sequence Diagram
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as Client
-    participant A as FastAPI /analyze
-    participant D as Detector
-    participant R as Response Nodes
-    participant DB as SQLite
-    participant B as Background Thread
-    participant G as LangGraph
-    participant T as Security Tools
+```text
+Participants:
+  C  = Client
+  A  = FastAPI /analyze
+  D  = Detector
+  R  = Response Nodes
+  DB = SQLite
+  B  = Background Thread
+  G  = LangGraph
+  T  = Security Tools
 
-    C->>A: POST /analyze {method, url, headers, body, source_ip}
-    A->>DB: is_ip_banned(source_ip)?
+1. C  -> A   : POST /analyze {method, url, headers, body, source_ip}
+2. A  -> DB  : is_ip_banned(source_ip)?
 
-    alt IP already banned
-        DB-->>A: true
-        A-->>C: attack / block
-    else IP not banned
-        DB-->>A: false
-        A->>D: parse_http_request(...)
-        A->>D: predict(http_request)
-        D-->>A: confidence
+If IP already banned:
+3. DB -> A   : true
+4. A  -> C   : attack / block
 
-        alt confidence >= HIGH_THRESHOLD
-            A->>R: auto_respond(state)
-            R->>DB: update_ip_after_request(is_attack=True)
-            opt repeat offender
-                R->>DB: set_ip_ban(source_ip, temp_ban)
-            end
-            R->>DB: log_incident(...)
-            R-->>A: response
-            A-->>C: attack / block or temp_ban
+If IP not banned:
+3. DB -> A   : false
+4. A  -> D   : parse_http_request(...)
+5. A  -> D   : predict(http_request)
+6. D  -> A   : confidence
 
-        else confidence <= LOW_THRESHOLD
-            A->>R: pass_through(state)
-            R->>DB: update_ip_after_request(is_attack=False)
-            R->>DB: log_incident(...)
-            R-->>A: response
-            A-->>C: benign / log_only
+If confidence >= HIGH_THRESHOLD:
+7.  A  -> R  : auto_respond(state)
+8.  R  -> DB : update_ip_after_request(is_attack=True)
+9.  R  -> DB : set_ip_ban(source_ip, temp_ban)        [repeat offender only]
+10. R  -> DB : log_incident(...)
+11. R  -> A  : response
+12. A  -> C  : attack / block or temp_ban
 
-        else grey zone
-            A->>DB: update_ip_after_request(is_grey_zone=True)
-            A->>B: queue_llm_analysis(http_request, detection_result)
-            A-->>C: pending / under_review
+If confidence <= LOW_THRESHOLD:
+7.  A  -> R  : pass_through(state)
+8.  R  -> DB : update_ip_after_request(is_attack=False)
+9.  R  -> DB : log_incident(...)
+10. R  -> A  : response
+11. A  -> C  : benign / log_only
 
-            B->>G: security_agent.invoke(...)
-            G->>G: prepare_llm_context
-            G->>G: security_chatbot
+If request is in the grey zone:
+7.  A  -> DB : update_ip_after_request(is_grey_zone=True)
+8.  A  -> B  : queue_llm_analysis(http_request, detection_result)
+9.  A  -> C  : pending / under_review
 
-            loop tool-assisted reasoning
-                G->>T: inspect_request_fields(...)
-                T-->>G: request breakdown
-                G->>T: check_ip_history(source_ip)
-                T->>DB: get_ip_reputation(), get_recent_incidents()
-                T-->>G: IP history
-                G->>T: log_security_incident(...)
-                T->>DB: update_ip_after_request(...)
-                T->>DB: log_incident(...)
-                T-->>G: logged
-                opt confirmed attack
-                    G->>T: block_ip(source_ip)
-                    T->>DB: set_ip_ban(...)
-                    T-->>G: banned
-                end
-                opt alert needed
-                    G->>T: send_alert(...)
-                    T-->>G: alert written
-                end
-            end
-        end
-    end
+Background analysis:
+10. B  -> G  : security_agent.invoke(...)
+11. G  -> G  : prepare_llm_context
+12. G  -> G  : security_chatbot
+
+Tool-assisted reasoning loop:
+13. G  -> T  : inspect_request_fields(...)
+14. T  -> G  : request breakdown
+15. G  -> T  : check_ip_history(source_ip)
+16. T  -> DB : get_ip_reputation(), get_recent_incidents()
+17. T  -> G  : IP history
+18. G  -> T  : log_security_incident(...)
+19. T  -> DB : update_ip_after_request(...)
+20. T  -> DB : log_incident(...)
+21. T  -> G  : logged
+22. G  -> T  : block_ip(source_ip)                    [confirmed attack only]
+23. T  -> DB : set_ip_ban(...)                        [confirmed attack only]
+24. T  -> G  : banned                                [confirmed attack only]
+25. G  -> T  : send_alert(...)                       [alert needed only]
+26. T  -> G  : alert written                         [alert needed only]
 ```
