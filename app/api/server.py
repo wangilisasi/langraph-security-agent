@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, BackgroundTasks
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from app.detection.detector import (
@@ -141,6 +142,143 @@ async def queue_llm_analysis(http_request: dict, detection_result: dict) -> None
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    """Serve a small human-friendly overview page for the API root."""
+    return """
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>HTTP Injection Detection API</title>
+        <style>
+          :root {
+            color-scheme: light dark;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f6f7f9;
+            color: #17181c;
+          }
+
+          body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 32px 16px;
+          }
+
+          main {
+            width: min(880px, 100%);
+          }
+
+          h1 {
+            margin: 0 0 8px;
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            line-height: 1;
+          }
+
+          p {
+            margin: 0;
+            color: #555b66;
+            line-height: 1.6;
+          }
+
+          .summary {
+            max-width: 720px;
+            font-size: 1.05rem;
+          }
+
+          .links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 28px;
+          }
+
+          a {
+            display: block;
+            min-height: 88px;
+            padding: 18px;
+            border: 1px solid #d8dbe2;
+            border-radius: 8px;
+            color: inherit;
+            text-decoration: none;
+            background: #ffffff;
+          }
+
+          a:hover {
+            border-color: #818895;
+          }
+
+          strong {
+            display: block;
+            margin-bottom: 6px;
+          }
+
+          code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            font-size: 0.9rem;
+          }
+
+          @media (prefers-color-scheme: dark) {
+            :root {
+              background: #101114;
+              color: #f0f2f5;
+            }
+
+            p {
+              color: #b3b8c2;
+            }
+
+            a {
+              background: #181a1f;
+              border-color: #30343c;
+            }
+
+            a:hover {
+              border-color: #7d8594;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>HTTP Injection Detection API</h1>
+          <p class="summary">
+            Hybrid FastAPI and LangGraph service for analyzing HTTP requests,
+            logging incidents, tracking IP reputation, and reviewing grey-zone
+            injection detections.
+          </p>
+
+          <nav class="links" aria-label="API shortcuts">
+            <a href="/docs">
+              <strong>Swagger UI</strong>
+              <p>Explore and run the API interactively.</p>
+            </a>
+            <a href="/stats">
+              <strong>Detection Stats</strong>
+              <p>View aggregate incident counts and configured thresholds.</p>
+            </a>
+            <a href="/incidents">
+              <strong>Recent Incidents</strong>
+              <p>Inspect recent model and LLM security decisions.</p>
+            </a>
+            <a href="/redoc">
+              <strong>ReDoc</strong>
+              <p>Read the generated OpenAPI reference.</p>
+            </a>
+          </nav>
+
+          <p style="margin-top: 24px;">
+            Main analysis endpoint: <code>POST /analyze</code>
+          </p>
+        </main>
+      </body>
+    </html>
+    """
+
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(req: AnalyzeRequest, background_tasks: BackgroundTasks):
