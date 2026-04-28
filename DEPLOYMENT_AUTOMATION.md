@@ -41,6 +41,8 @@ EnvironmentFile=/var/www/langraph-security-agent/.env
 ExecStart=/var/www/langraph-security-agent/.venv/bin/uvicorn app.api.server:app --host 127.0.0.1 --port 8001
 ```
 
+The app listens on **127.0.0.1:8001** only; TLS and a public hostname should be handled by a reverse proxy (for example Nginx) with `proxy_pass http://127.0.0.1:8001`. The same process serves the API, Swagger (`/docs`), and the React SPA from `frontend/dist`, so each deploy must run **`npm ci && npm run build`** in `frontend/` (see `scripts/deploy.sh`).
+
 The health endpoint is:
 
 ```text
@@ -102,19 +104,25 @@ This script performs the deployment on the server:
    ./.venv/bin/python -m pip install -r requirements.txt
    ```
 
-5. Runs the reliable smoke tests:
+5. Builds the React UI into `frontend/dist` (requires `npm` / Node on the server):
+
+   ```bash
+   cd frontend && npm ci && npm run build && cd ..
+   ```
+
+6. Runs the reliable smoke tests:
 
    ```bash
    ./.venv/bin/python -m pytest tests/test_detector.py tests/test_database_smoke.py -q
    ```
 
-6. Restarts the service:
+7. Restarts the service:
 
    ```bash
    systemctl restart langraph-security-agent.service
    ```
 
-7. Checks the health endpoint:
+8. Checks the health endpoint:
 
    ```bash
    curl -fsS http://127.0.0.1:8001/health

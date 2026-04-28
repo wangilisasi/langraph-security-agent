@@ -1,6 +1,9 @@
 .env
+.DS_Store
 .venv/
 __pycache__/
 *.pyc
 output/
 .pytest_cache/
+frontend/node_modules/
+frontend/dist/

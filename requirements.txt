@@ -1,8 +1,15 @@
-langgraph==1.0.8
-langgraph-prebuilt==1.0.8
-langchain-openai==1.1.9
-langchain-core==1.2.13
+# LangGraph: keep core + prebuilt aligned (prebuilt 1.0.9+ needs langgraph>=1.1.0 for ExecutionInfo/ServerInfo).
+# See https://github.com/langchain-ai/langgraph/issues/7404
+langgraph==1.1.5
+langgraph-prebuilt==1.0.9
+langgraph-checkpoint==4.0.3
+langgraph-sdk==0.3.13
+langchain-core==1.2.22
+langchain-openai==1.1.12
+langsmith==0.7.37
+openai==2.32.0
+pydantic==2.13.3
 python-dotenv==1.2.1
-fastapi
-uvicorn[standard]
-pytest
+fastapi==0.136.1
+uvicorn[standard]==0.46.0
+pytest==9.0.2

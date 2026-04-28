@@ -15,6 +15,12 @@ git pull --ff-only origin main
 
 ./.venv/bin/python -m pip install -r requirements.txt
 
+if ! command -v npm >/dev/null 2>&1; then
+	echo "error: npm is required to build frontend/dist (install Node.js on the VPS)" >&2
+	exit 1
+fi
+( cd frontend && npm ci && npm run build )
+
 # The health TestClient test currently hangs in this environment, so keep
 # deployment verification to the fast unit/smoke tests that are reliable.
 ./.venv/bin/python -m pytest tests/test_detector.py tests/test_database_smoke.py -q

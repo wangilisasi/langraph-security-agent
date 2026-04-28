@@ -6,9 +6,11 @@ import logging
 import threading
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
-from fastapi import FastAPI, BackgroundTasks
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.detection.detector import (
@@ -98,6 +100,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+FRONTEND_DIST = _REPO_ROOT / "frontend" / "dist"
+
 
 # ---------------------------------------------------------------------------
 # Request / Response schemas
@@ -176,567 +181,43 @@ async def health():
     return {"status": "ok", "version": app.version}
 
 
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    """Serve a small human-friendly overview page for the API root."""
-    return """
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="description" content="Injection Shield — HTTP injection detection API: fast ML scoring, LangGraph grey-zone analysis, incidents and IP reputation.">
-        <title>Injection Shield · API</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,550;1,9..144,550&family=Lexend:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-        <style>
-          :root {
-            color-scheme: light dark;
-            --ink: #12141a;
-            --ink-soft: #3d4350;
-            --muted: #5c6475;
-            --bg: #f3f1ec;
-            --bg-deep: #e6e2d9;
-            --surface: rgba(255, 255, 255, 0.78);
-            --surface-solid: #fdfcfa;
-            --border: rgba(18, 20, 26, 0.1);
-            --accent: #0f6b5c;
-            --accent-glow: rgba(15, 107, 92, 0.22);
-            --warn: #b45309;
-            --focus: #0d5c6e;
-            --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-            --font-ui: "Lexend", system-ui, sans-serif;
-            --font-mono: "JetBrains Mono", ui-monospace, monospace;
-            font-family: var(--font-ui);
-            background-color: var(--bg);
-            color: var(--ink);
-          }
-
-          * {
-            box-sizing: border-box;
-          }
-
-          body {
-            margin: 0;
-            min-height: 100vh;
-          }
-
-          .atmosphere {
-            position: fixed;
-            inset: 0;
-            z-index: -1;
-            pointer-events: none;
-            background:
-              radial-gradient(1200px 700px at 12% -8%, var(--accent-glow), transparent 55%),
-              radial-gradient(900px 500px at 88% 108%, rgba(180, 83, 9, 0.08), transparent 50%),
-              linear-gradient(165deg, var(--bg) 0%, var(--bg-deep) 100%);
-          }
-
-          .atmosphere::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            opacity: 0.35;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
-          }
-
-          .skip-link {
-            position: absolute;
-            left: 12px;
-            top: 12px;
-            padding: 8px 12px;
-            background: var(--surface-solid);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 0.8125rem;
-            font-family: var(--font-ui);
-            color: var(--ink);
-            text-decoration: none;
-            z-index: 100;
-            clip-path: inset(50%);
-            width: 1px;
-            height: 1px;
-            overflow: hidden;
-            white-space: nowrap;
-          }
-
-          .skip-link:focus {
-            clip-path: none;
-            width: auto;
-            height: auto;
-            overflow: visible;
-          }
-
-          .skip-link:focus-visible {
-            outline: 2px solid var(--focus);
-            outline-offset: 2px;
-          }
-
-          .page {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-          }
-
-          .shell {
-            width: min(920px, 100%);
-            margin-inline: auto;
-            padding-inline: clamp(16px, 4vw, 28px);
-          }
-
-          .site-header {
-            flex-shrink: 0;
-            border-bottom: 1px solid var(--border);
-            background: var(--surface);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-          }
-
-          .site-header .inner {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 14px 28px;
-            padding-block: 18px;
-          }
-
-          .brand {
-            font-family: var(--font-display);
-            font-weight: 550;
-            font-size: 1.2rem;
-            letter-spacing: -0.03em;
-            line-height: 1.15;
-            color: var(--ink);
-          }
-
-          .brand span {
-            display: block;
-            font-family: var(--font-ui);
-            font-weight: 400;
-            font-size: 0.75rem;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            color: var(--muted);
-            margin-top: 6px;
-          }
-
-          .header-nav {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-          }
-
-          .header-nav a {
-            font-size: 0.8125rem;
-            font-weight: 500;
-            color: var(--ink-soft);
-            text-decoration: none;
-            padding: 8px 12px;
-            border-radius: 999px;
-            border: 1px solid transparent;
-            transition: color 0.2s, background 0.2s, border-color 0.2s;
-          }
-
-          .header-nav a:hover {
-            color: var(--accent);
-            background: rgba(15, 107, 92, 0.08);
-            border-color: rgba(15, 107, 92, 0.15);
-          }
-
-          .header-nav a:focus-visible {
-            outline: 2px solid var(--focus);
-            outline-offset: 2px;
-          }
-
-          @media (max-width: 640px) {
-            .site-header .inner {
-              flex-direction: column;
-              align-items: stretch;
-              gap: 10px;
-              padding-block: 14px;
-            }
-
-            .brand {
-              font-size: 1.05rem;
-            }
-
-            .brand span {
-              font-size: 0.6875rem;
-            }
-
-            .header-nav {
-              display: flex;
-              flex-wrap: nowrap;
-              overflow-x: auto;
-              overflow-y: hidden;
-              gap: 8px;
-              padding: 4px 2px 10px;
-              margin: 0 -6px;
-              padding-left: 6px;
-              padding-right: 6px;
-              -webkit-overflow-scrolling: touch;
-              scrollbar-width: thin;
-            }
-
-            .header-nav a {
-              flex-shrink: 0;
-              padding: 8px 14px;
-              font-size: 0.78rem;
-            }
-          }
-
-          .site-main {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding-block: clamp(36px, 8vw, 72px);
-          }
-
-          .site-main .content {
-            width: min(920px, 100%);
-            padding-inline: clamp(16px, 4vw, 28px);
-          }
-
-          @keyframes rise {
-            from {
-              opacity: 0;
-              transform: translateY(16px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-
-          .hero-animate > * {
-            animation: rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-          }
-
-          .hero-animate > *:nth-child(1) { animation-delay: 0.04s; }
-          .hero-animate > *:nth-child(2) { animation-delay: 0.1s; }
-          .hero-animate > *:nth-child(3) { animation-delay: 0.16s; }
-          .hero-animate > *:nth-child(4) { animation-delay: 0.22s; }
-          .hero-animate > *:nth-child(5) { animation-delay: 0.28s; }
-          .hero-animate > *:nth-child(6) { animation-delay: 0.34s; }
-
-          .eyebrow {
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: var(--accent);
-            margin-bottom: 14px;
-          }
-
-          h1 {
-            font-family: var(--font-display);
-            font-weight: 550;
-            margin: 0 0 10px;
-            font-size: clamp(2.15rem, 5.5vw, 3.35rem);
-            line-height: 1.08;
-            letter-spacing: -0.035em;
-            color: var(--ink);
-          }
-
-          .tagline {
-            font-family: var(--font-ui);
-            font-size: clamp(1.05rem, 2.4vw, 1.3rem);
-            font-weight: 500;
-            color: var(--ink-soft);
-            margin: 0 0 18px;
-            max-width: 36rem;
-            line-height: 1.4;
-          }
-
-          p {
-            margin: 0;
-            color: var(--muted);
-            line-height: 1.65;
-          }
-
-          .summary {
-            max-width: 38rem;
-            font-size: 1.0625rem;
-            color: var(--ink-soft);
-          }
-
-          .links {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-            gap: 14px;
-            margin-top: 32px;
-          }
-
-          .links a {
-            --card-accent: var(--accent);
-            display: block;
-            min-height: 100px;
-            padding: 20px 20px 18px;
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            color: inherit;
-            text-decoration: none;
-            background: var(--surface);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
-            position: relative;
-            overflow: hidden;
-            transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-          }
-
-          .links a::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background: var(--card-accent);
-            opacity: 0.92;
-          }
-
-          .links a:nth-child(2) { --card-accent: #7c6f64; }
-          .links a:nth-child(3) { --card-accent: var(--warn); }
-          .links a:nth-child(4) { --card-accent: #4a5d78; }
-
-          .links a:hover {
-            transform: translateY(-3px);
-            box-shadow:
-              0 18px 40px -24px rgba(18, 20, 26, 0.35),
-              0 1px 0 rgba(255, 255, 255, 0.65) inset;
-            border-color: rgba(18, 20, 26, 0.14);
-          }
-
-          .links a:focus-visible {
-            outline: 2px solid var(--focus);
-            outline-offset: 3px;
-          }
-
-          .links strong {
-            display: block;
-            margin-bottom: 8px;
-            font-family: var(--font-ui);
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--ink);
-          }
-
-          .links a p {
-            font-size: 0.875rem;
-          }
-
-          code {
-            font-family: var(--font-mono);
-            font-size: 0.84em;
-            font-weight: 500;
-            padding: 0.12em 0.4em;
-            border-radius: 5px;
-            background: rgba(15, 107, 92, 0.1);
-            color: var(--ink-soft);
-          }
-
-          .endpoint-hint {
-            margin-top: 28px;
-            padding: 16px 18px;
-            font-size: 0.9375rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            color: var(--ink-soft);
-          }
-
-          .endpoint-hint code {
-            background: rgba(18, 20, 26, 0.06);
-          }
-
-          .site-footer {
-            flex-shrink: 0;
-            border-top: 1px solid var(--border);
-            background: var(--surface);
-            backdrop-filter: blur(12px);
-            padding-block: 22px;
-            font-size: 0.8125rem;
-            color: var(--muted);
-          }
-
-          .site-footer .inner {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 14px 28px;
-          }
-
-          .footer-meta {
-            margin: 0;
-            font-weight: 500;
-            color: var(--ink-soft);
-          }
-
-          .footer-links {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px 18px;
-            list-style: none;
-            margin: 0;
-            padding: 0;
-          }
-
-          .footer-links a {
-            color: var(--accent);
-            text-decoration: none;
-            font-weight: 500;
-            border-bottom: 1px solid transparent;
-            transition: border-color 0.2s;
-          }
-
-          .footer-links a:hover {
-            border-bottom-color: var(--accent);
-          }
-
-          .footer-links a:focus-visible {
-            outline: 2px solid var(--focus);
-            outline-offset: 2px;
-            border-radius: 2px;
-          }
-
-          @media (prefers-color-scheme: dark) {
-            :root {
-              --ink: #eceae4;
-              --ink-soft: #b8b4a8;
-              --muted: #8a8578;
-              --bg: #121410;
-              --bg-deep: #0a0b08;
-              --surface: rgba(28, 30, 26, 0.82);
-              --surface-solid: #1c1e1a;
-              --border: rgba(236, 234, 228, 0.1);
-              --accent: #5eead4;
-              --accent-glow: rgba(94, 234, 212, 0.12);
-              --warn: #fbbf24;
-              --focus: #7dd3fc;
-            }
-
-            .atmosphere {
-              background:
-                radial-gradient(1000px 600px at 10% 0%, var(--accent-glow), transparent 50%),
-                radial-gradient(800px 480px at 90% 100%, rgba(251, 191, 36, 0.06), transparent 45%),
-                linear-gradient(165deg, var(--bg) 0%, var(--bg-deep) 100%);
-            }
-
-            .links a {
-              box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
-            }
-
-            .links a:hover {
-              box-shadow:
-                0 20px 50px -28px rgba(0, 0, 0, 0.75),
-                0 1px 0 rgba(255, 255, 255, 0.04) inset;
-            }
-
-            code {
-              background: rgba(94, 234, 212, 0.12);
-              color: var(--ink-soft);
-            }
-
-            .endpoint-hint code {
-              background: rgba(236, 234, 228, 0.08);
-            }
-
-            .header-nav a:hover {
-              background: rgba(94, 234, 212, 0.1);
-              border-color: rgba(94, 234, 212, 0.2);
-            }
-          }
-
-          @media (prefers-reduced-motion: reduce) {
-            .hero-animate > * {
-              animation: none;
-            }
-
-            .links a {
-              transition: none;
-            }
-
-            .links a:hover {
-              transform: none;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="atmosphere" aria-hidden="true"></div>
-        <a class="skip-link" href="#main">Skip to main content</a>
-        <div class="page">
-          <header class="site-header">
-            <div class="shell inner">
-              <div class="brand">
-                Injection Shield
-                <span>Research API · ML + LangGraph</span>
-              </div>
-              <nav class="header-nav" aria-label="Quick links">
-                <a href="/docs">Swagger</a>
-                <a href="/redoc">ReDoc</a>
-                <a href="/health">Health</a>
-                <a href="/stats">Stats</a>
-                <a href="/incidents">Incidents</a>
-              </nav>
-            </div>
-          </header>
-
-          <main class="site-main" id="main">
-            <div class="content hero-animate">
-              <p class="eyebrow">Tiered detection pipeline</p>
-              <h1>Injection Shield</h1>
-              <p class="tagline">HTTP injection detection, without the wait.</p>
-              <p class="summary">
-                Fast scoring on every request; uncertain traffic passes through instantly while LangGraph
-                and an LLM reason about grey-zone cases in the background—incidents and IP reputation
-                stay in SQLite for audit and research.
-              </p>
-
-              <nav class="links" aria-label="API shortcuts">
-                <a href="/docs">
-                  <strong>Swagger UI</strong>
-                  <p>Explore and run the API interactively.</p>
-                </a>
-                <a href="/stats">
-                  <strong>Detection stats</strong>
-                  <p>Incident counts and configured thresholds.</p>
-                </a>
-                <a href="/incidents">
-                  <strong>Recent incidents</strong>
-                  <p>Model and LLM decisions in one list.</p>
-                </a>
-                <a href="/redoc">
-                  <strong>ReDoc</strong>
-                  <p>OpenAPI reference, reader-friendly layout.</p>
-                </a>
-              </nav>
-
-              <p class="endpoint-hint">
-                <code>POST /analyze</code> — submit a request.
-                Grey-zone follow-up: <code>GET /request/{request_id}</code>
-              </p>
-            </div>
-          </main>
-
-          <footer class="site-footer">
-            <div class="shell inner">
-              <p class="footer-meta">Injection Shield · HTTP injection research</p>
-              <ul class="footer-links" aria-label="Footer">
-                <li><a href="/docs">OpenAPI</a></li>
-                <li><a href="/health">Health</a></li>
-                <li><a href="/ip/127.0.0.1">Sample IP JSON</a></li>
-              </ul>
-            </div>
-          </footer>
-        </div>
-      </body>
-    </html>
-    """
+def _spa_index_response():
+    """Serve the built React app shell, or a short message if dist is missing."""
+    index = FRONTEND_DIST / "index.html"
+    if not index.is_file():
+        return HTMLResponse(
+            (
+                "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
+                "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+                "<title>Injection Shield</title></head><body>"
+                "<p>Frontend not built. From the repo root run:</p>"
+                "<pre>cd frontend && npm ci && npm run build</pre>"
+                "</body></html>"
+            ),
+            status_code=503,
+        )
+    return FileResponse(index)
+
+
+def _spa_dist_file_or_none(relative_path: str) -> Path | None:
+    """Resolve a file under frontend/dist without path traversal."""
+    if not relative_path or relative_path.startswith("assets/"):
+        return None
+    base = FRONTEND_DIST.resolve()
+    candidate = (FRONTEND_DIST / relative_path).resolve()
+    try:
+        candidate.relative_to(base)
+    except ValueError:
+        return None
+    if candidate.is_file():
+        return candidate
+    return None
+
+
+@app.get("/", include_in_schema=False)
+async def spa_root():
+    """Serve the single-page app entry (same origin as the JSON API)."""
+    return _spa_index_response()
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
@@ -917,3 +398,24 @@ async def get_request_status(request_id: str):
         "analysis": status,
         "incident": incident,
     }
+
+
+_spa_assets_dir = FRONTEND_DIST / "assets"
+if _spa_assets_dir.is_dir():
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(_spa_assets_dir)),
+        name="spa_assets",
+    )
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_history_fallback(full_path: str):
+    """Deep links for the React router; JSON API paths are registered above."""
+    dist_file = _spa_dist_file_or_none(full_path)
+    if dist_file is not None:
+        return FileResponse(dist_file)
+    index = FRONTEND_DIST / "index.html"
+    if not index.is_file():
+        raise HTTPException(status_code=503, detail="SPA not built (run: cd frontend && npm run build)")
+    return FileResponse(index)

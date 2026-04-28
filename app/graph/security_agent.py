@@ -3,11 +3,15 @@
 import json
 import operator
 import os
+from pathlib import Path
 from typing import Annotated, TypedDict
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Resolve .env from repo root (not cwd), so uvicorn works from any directory.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if not load_dotenv(_REPO_ROOT / ".env"):
+    load_dotenv()
 
 from pydantic import SecretStr
 from langchain_openai import ChatOpenAI
@@ -32,19 +36,51 @@ class SecurityState(TypedDict, total=False):
 
 
 # ---------------------------------------------------------------------------
-# LLM setup (reuses the same OpenRouter config)
+# LLM setup — OpenRouter (OpenAI-compatible API)
 # ---------------------------------------------------------------------------
 
-openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+def _openrouter_headers() -> dict[str, str] | None:
+    """Optional OpenRouter attribution headers (see https://openrouter.ai/docs)."""
+    referer = os.getenv("OPENROUTER_HTTP_REFERER")
+    title = os.getenv("OPENROUTER_APP_TITLE")
+    if not referer and not title:
+        return None
+    headers: dict[str, str] = {}
+    if referer:
+        headers["HTTP-Referer"] = referer
+    if title:
+        headers["X-Title"] = title
+    return headers
 
-llm = ChatOpenAI(
-    model="openai/gpt-5-nano",
-    base_url="https://openrouter.ai/api/v1",
-    api_key=SecretStr(openrouter_api_key) if openrouter_api_key else None,
-    temperature=0,
-    max_retries=2,
-    timeout=30.0,
-)
+
+def _effective_openrouter_or_openai_key() -> str | None:
+    for name in ("OPENROUTER_API_KEY", "OPENAI_API_KEY"):
+        raw = os.getenv(name)
+        if raw and raw.strip():
+            return raw.strip()
+    return None
+
+
+openrouter_api_key = _effective_openrouter_or_openai_key()
+# Underlying OpenAI SDK only auto-reads OPENAI_API_KEY; keep it in sync for OpenRouter-only .env files.
+if openrouter_api_key:
+    os.environ.setdefault("OPENAI_API_KEY", openrouter_api_key)
+_base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+_model = os.getenv("OPENROUTER_MODEL", "openai/gpt-5-nano")
+
+_llm_kwargs: dict = {
+    "model": _model,
+    "base_url": f"{_base_url}/v1" if not _base_url.endswith("/v1") else _base_url,
+    "api_key": SecretStr(openrouter_api_key) if openrouter_api_key else None,
+    "temperature": 0,
+    "max_retries": 2,
+    "timeout": 30.0,
+}
+_headers = _openrouter_headers()
+if _headers:
+    _llm_kwargs["default_headers"] = _headers
+
+llm = ChatOpenAI(**_llm_kwargs)
 
 llm_with_security_tools = llm.bind_tools(security_tools)
 
