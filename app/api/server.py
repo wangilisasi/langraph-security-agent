@@ -356,7 +356,6 @@ async def root():
           .hero-animate > *:nth-child(3) { animation-delay: 0.16s; }
           .hero-animate > *:nth-child(4) { animation-delay: 0.22s; }
           .hero-animate > *:nth-child(5) { animation-delay: 0.28s; }
-          .hero-animate > *:nth-child(6) { animation-delay: 0.34s; }
 
           .eyebrow {
             font-size: 0.75rem;
@@ -388,43 +387,6 @@ async def root():
             max-width: 38rem;
             font-size: 1.0625rem;
             color: var(--ink-soft);
-          }
-
-          .pipeline {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 10px 8px;
-            margin-top: 28px;
-            padding: 14px 18px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            backdrop-filter: blur(8px);
-          }
-
-          .pipeline-step {
-            font-family: var(--font-mono);
-            font-size: 0.7rem;
-            font-weight: 500;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            color: var(--ink-soft);
-            padding: 6px 10px;
-            background: var(--surface-solid);
-            border-radius: 6px;
-            border: 1px solid var(--border);
-          }
-
-          .pipeline-num {
-            color: var(--accent);
-            margin-right: 6px;
-          }
-
-          .pipeline-arrow {
-            color: var(--muted);
-            font-size: 0.85rem;
-            user-select: none;
           }
 
           .links {
@@ -659,14 +621,6 @@ async def root():
                 and an LLM reason about grey-zone cases in the background—incidents and IP reputation
                 stay in SQLite for audit and research.
               </p>
-
-              <div class="pipeline" role="list" aria-label="Request flow">
-                <span class="pipeline-step" role="listitem"><span class="pipeline-num">1</span>ML score</span>
-                <span class="pipeline-arrow" aria-hidden="true">→</span>
-                <span class="pipeline-step" role="listitem"><span class="pipeline-num">2</span>Route</span>
-                <span class="pipeline-arrow" aria-hidden="true">→</span>
-                <span class="pipeline-step" role="listitem"><span class="pipeline-num">3</span>Block · pass · queue</span>
-              </div>
 
               <nav class="links" aria-label="API shortcuts">
                 <a href="/docs">
