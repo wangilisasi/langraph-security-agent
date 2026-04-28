@@ -1,3 +1,5 @@
+@import 'tailwindcss';
+
 :root {
   color-scheme: light dark;
   --ink: #12141a;
@@ -13,13 +15,37 @@
   --warn: #b45309;
   --focus: #0d5c6e;
   --err: #9f1239;
-  --font-display: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  --font-ui: 'Lexend', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --stack-display: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --stack-sans: 'Lexend', system-ui, sans-serif;
+  --stack-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-display: var(--stack-display);
+  --font-ui: var(--stack-sans);
+  --font-mono: var(--stack-mono);
   font-family: var(--font-ui);
   background-color: var(--bg);
   color: var(--ink);
   line-height: 1.5;
+}
+
+/* Tailwind v4: semantic utilities (text-ink, bg-bg, font-sans, …) track :root / dark overrides. */
+@theme inline {
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-bg: var(--bg);
+  --color-bg-deep: var(--bg-deep);
+  --color-accent: var(--accent);
+  --color-accent-glow: var(--accent-glow);
+  --color-warn: var(--warn);
+  --color-focus: var(--focus);
+  --color-err: var(--err);
+  --color-surface-solid: var(--surface-solid);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+
+  --font-display: var(--stack-display);
+  --font-sans: var(--stack-sans);
+  --font-mono: var(--stack-mono);
 }
 
 *,
