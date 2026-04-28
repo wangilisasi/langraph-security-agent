@@ -25,6 +25,33 @@ from app.storage import database as db
 logger = logging.getLogger("security_server")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+OPENAPI_DESCRIPTION = """
+**Injection Shield** is a research API for HTTP-layer injection detection. It combines a
+fast inline scorer with asynchronous LLM analysis for uncertain (grey-zone) traffic.
+
+## `POST /analyze`
+
+Submit a synthetic or captured HTTP request (`method`, `url`, `headers`, `body`, `source_ip`).
+The service returns a **confidence** score, **tier** (high / low / grey / banned), and
+**decision** / **action_taken**.
+
+- **High confidence attack** — Handled immediately (block path; no user-visible LLM delay).
+- **Low confidence** — Treated as benign for the fast path (log / pass-through behavior per your pipeline).
+- **Grey zone** — The request is **passed through immediately**; a LangGraph + LLM workflow runs
+  **in the background** to refine the decision, update incidents, and IP reputation.
+
+Use **`GET /request/{request_id}`** with the `request_id` from the analyze response to poll
+grey-zone processing status and the final incident record when available.
+
+## Other endpoints
+
+- **`GET /health`** — Liveness (no database work).
+- **`GET /incidents`**, **`GET /stats`**, **`GET /ip/{source_ip}`** — Audit and reputation data (JSON).
+
+Design notes for this project live in the repo (`ARCHITECTURE.md`). Source:
+[github.com/wangilisasi/langraph-security-agent](https://github.com/wangilisasi/langraph-security-agent).
+"""
+
 # Thread pool for running the synchronous LangGraph agent in the background
 _executor = ThreadPoolExecutor(max_workers=4)
 _analysis_status_lock = threading.Lock()
@@ -65,8 +92,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="HTTP Injection Detection API",
-    description="Tiered detection pipeline: fast ML model inline, LLM for grey-zone requests.",
+    title="Injection Shield",
+    description=OPENAPI_DESCRIPTION.strip(),
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -158,8 +185,8 @@ async def root():
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="description" content="HTTP injection detection API: fast ML scoring, LangGraph grey-zone analysis, incidents and IP reputation.">
-        <title>HTTP Injection Detection API</title>
+        <meta name="description" content="Injection Shield — HTTP injection detection API: fast ML scoring, LangGraph grey-zone analysis, incidents and IP reputation.">
+        <title>Injection Shield · API</title>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,550;1,9..144,550&family=Lexend:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -323,6 +350,43 @@ async def root():
             outline-offset: 2px;
           }
 
+          @media (max-width: 640px) {
+            .site-header .inner {
+              flex-direction: column;
+              align-items: stretch;
+              gap: 10px;
+              padding-block: 14px;
+            }
+
+            .brand {
+              font-size: 1.05rem;
+            }
+
+            .brand span {
+              font-size: 0.6875rem;
+            }
+
+            .header-nav {
+              display: flex;
+              flex-wrap: nowrap;
+              overflow-x: auto;
+              overflow-y: hidden;
+              gap: 8px;
+              padding: 4px 2px 10px;
+              margin: 0 -6px;
+              padding-left: 6px;
+              padding-right: 6px;
+              -webkit-overflow-scrolling: touch;
+              scrollbar-width: thin;
+            }
+
+            .header-nav a {
+              flex-shrink: 0;
+              padding: 8px 14px;
+              font-size: 0.78rem;
+            }
+          }
+
           .site-main {
             flex: 1;
             display: flex;
@@ -356,6 +420,7 @@ async def root():
           .hero-animate > *:nth-child(3) { animation-delay: 0.16s; }
           .hero-animate > *:nth-child(4) { animation-delay: 0.22s; }
           .hero-animate > *:nth-child(5) { animation-delay: 0.28s; }
+          .hero-animate > *:nth-child(6) { animation-delay: 0.34s; }
 
           .eyebrow {
             font-size: 0.75rem;
@@ -369,12 +434,21 @@ async def root():
           h1 {
             font-family: var(--font-display);
             font-weight: 550;
-            margin: 0 0 16px;
+            margin: 0 0 10px;
             font-size: clamp(2.15rem, 5.5vw, 3.35rem);
             line-height: 1.08;
             letter-spacing: -0.035em;
             color: var(--ink);
-            max-width: 14ch;
+          }
+
+          .tagline {
+            font-family: var(--font-ui);
+            font-size: clamp(1.05rem, 2.4vw, 1.3rem);
+            font-weight: 500;
+            color: var(--ink-soft);
+            margin: 0 0 18px;
+            max-width: 36rem;
+            line-height: 1.4;
           }
 
           p {
@@ -615,7 +689,8 @@ async def root():
           <main class="site-main" id="main">
             <div class="content hero-animate">
               <p class="eyebrow">Tiered detection pipeline</p>
-              <h1>HTTP injection detection, without the wait.</h1>
+              <h1>Injection Shield</h1>
+              <p class="tagline">HTTP injection detection, without the wait.</p>
               <p class="summary">
                 Fast scoring on every request; uncertain traffic passes through instantly while LangGraph
                 and an LLM reason about grey-zone cases in the background—incidents and IP reputation
@@ -650,7 +725,7 @@ async def root():
 
           <footer class="site-footer">
             <div class="shell inner">
-              <p class="footer-meta">LangGraph security agent · HTTP injection research</p>
+              <p class="footer-meta">Injection Shield · HTTP injection research</p>
               <ul class="footer-links" aria-label="Footer">
                 <li><a href="/docs">OpenAPI</a></li>
                 <li><a href="/health">Health</a></li>
